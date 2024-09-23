@@ -1,0 +1,11 @@
+4
+0 0 0 0 0 0 0 
+0 0 0 0 0 0 0 
+0 0 0 0 0 0 0 
+0 0 0 0 0 0 0 
+3 0 0 0 0 0 3 
+3 3 0 0 0 3 3 
+3 3 3 0 3 3 3 
+Player 1 Type: ai
+Player 2 Type: human
+{"player": 1, "move": "TLE"}
