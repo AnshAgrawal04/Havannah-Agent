@@ -46,7 +46,7 @@ class AIPlayer:
     def UCB(self, node):
         if node['parent']['visits'] == 0:
             return float('inf')
-        return node['wins'] / node['visits'] + 1.41 * math.sqrt(math.log(node['parent']['visits']) / node['visits'])
+        return node['wins'] / (node['visits']+1)+ 1.41 * math.sqrt(math.log(node['parent']['visits']) / (node['visits']+1))
     
     def SelectNode(self, node):
         if node['children'] == []:
@@ -71,11 +71,16 @@ class AIPlayer:
     def MCTS(self, state):
         if state.tobytes() not in self.state_tree:
             self.state_tree[state.tobytes()] = {'state': state, 'parent': None, 'player': self.player_number, 'wins': 0, 'visits': 0, 'children': []}
+            # 
         root = self.state_tree[state.tobytes()]
-        for _ in range(1000):
+        for _ in range(2):
             node = root
             while node['children'] != []:
                 node = self.SelectNode(node)
+            
+            # Expand the node
+            self.ExpandNode(node)
+            print(len(node['children']))
             if node['visits'] == 0:
                 result = self.RandomRollout(np.copy(node['state']), node['player'])
             else:
@@ -94,5 +99,5 @@ class AIPlayer:
         `Tuple[int, int]`: The next move for the AIPlayer
         """
         state = np.copy(state)
-        move = self.MCTS(state)
-        return Tuple(np.argwhere(state != move)[0])
+        new_state = self.MCTS(state)
+        return np.argwhere(new_state != state)[0]
