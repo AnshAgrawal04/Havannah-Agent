@@ -643,6 +643,7 @@ def check_win(board: np.array, move: Tuple[int, int], player_num: int, path:List
     # All paths for player_num are set to "True", no other information needed, hence encoded as a lighweight boolean array
     board = (board == player_num)
     if check_ring(board, move):
+        # print("Ring found")
         if path != None:
             path.clear()
             path.extend(find_ring(board, move))
@@ -651,12 +652,15 @@ def check_win(board: np.array, move: Tuple[int, int], player_num: int, path:List
     win, way = check_fork_and_bridge(board, move)
     if win:
         if way == "fork":
+            # print("Fork found")
             if path != None:
                 path.clear()
                 path.extend(find_fork(board, move))
         elif way == "bridge":
+            # print("Bridge found")
             if path != None:
                 path.clear()
                 path.extend(find_bridge(board, move))
         return True, way
+    # print("No win found")
     return False, None
