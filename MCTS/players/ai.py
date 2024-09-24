@@ -24,48 +24,61 @@ class AIPlayer:
         self.state_tree = {}
 
     
-    def RandomRollout(self,state,player):
+    def RandomRollout(self, state, player):
         while True:
             available_moves = np.argwhere(state == 0)
             if len(available_moves) == 0:
                 break
             move = random.choice(available_moves)
-            if check_win(state,tuple(move),player):
+            if check_win(state, tuple(move), player)[0]:
+                # print(f"Player {player} won rollout")
                 return 1
             state[move[0], move[1]] = player
+
+            # print("Change", np.argwhere(state != old_state))
+
             available_moves = np.argwhere(state == 0)
             if len(available_moves) == 0:
                 break
             move = random.choice(available_moves)
-            if check_win(state,tuple(move),3-player):
+            if check_win(state,tuple(move), 3 - player)[0]:
+                # print(f"Player {player} lost rollout")
                 return -1
             state[move[0], move[1]] = 3 - player
+
         return 0
     
     def UCB(self, node):
-        if node['parent']['visits'] == 0:
+        if node['visits'] == 0 or node['parent']['visits'] == 0:
             return float('inf')
-        return node['wins'] / (node['visits']+1)+ 1.41 * math.sqrt(math.log(node['parent']['visits']) / (node['visits']+1))
+        return node['wins'] / (node['visits'] + 1) + 1.41 * math.sqrt(math.log(node['parent']['visits']) / (node['visits'] + 1))
     
     def softmax(self,x):
         e_x = np.exp(x - np.max(x))
-        return e_x / e_x.sum()
+        return e_x / np.sum(e_x)
 
     def SelectNode(self, node):
         if node['children'] == []:
             return node
         ucb_values = [self.UCB(child) for child in node['children']]
-        probabilities = self.softmax(ucb_values)
-        selected_index = np.random.choice(len(node['children']), p=probabilities)
+        # probabilities = self.softmax(ucb_values)
+        # selected_index = np.random.choice(len(node['children']), p=probabilities)
+        selected_index = np.argmax([self.UCB(child) for child in node['children']])
         return node['children'][selected_index]
     
     def ExpandNode(self, node):
-        available_moves = np.argwhere(node['state'] == 0)   
+        available_moves = np.argwhere(node['state'] == 0)
         for move in available_moves:
             new_state = np.copy(node['state'])
             new_state[move[0], move[1]] = node['player']
-            new_node = {'state': new_state, 'parent': node, 'player': 3 - node['player'], 'wins': 0, 'visits': 0, 'children': []}
-            node['children'].append(new_node)
+            if new_state.tobytes() in self.state_tree:
+                node['children'].append(self.state_tree[new_state.tobytes()])
+            else:
+                new_node = {'state': new_state, 'parent': node, 'player': 3 - node['player'], 'wins': 0, 'visits': 0, 'children': []}
+                self.state_tree[new_state.tobytes()] = new_node
+                node['children'].append(new_node)
+        # return self.state[new_state.tobytes()]
+            
 
     def Backpropagate(self, node, result):
         while node is not None:
@@ -75,23 +88,33 @@ class AIPlayer:
     
     def MCTS(self, state):
         if state.tobytes() not in self.state_tree:
+            # print("Adding state to tree")
             self.state_tree[state.tobytes()] = {'state': state, 'parent': None, 'player': self.player_number, 'wins': 0, 'visits': 0, 'children': []}
-            # 
+            
         root = self.state_tree[state.tobytes()]
         for _ in range(1000):
             node = root
-            while node['children'] != []:
+            while len(node['children']) > 0:
                 node = self.SelectNode(node)
-            
-            # Expand the node
-            self.ExpandNode(node)
-            print(len(node['children']))
+
             if node['visits'] == 0:
                 result = self.RandomRollout(np.copy(node['state']), node['player'])
             else:
-                result = self.RandomRollout(np.copy(node['state']), node['player'])
+                # Expand the node
+                self.ExpandNode(node)
+                child_node = self.SelectNode(node)
+                result = self.RandomRollout(np.copy(child_node['state']), node['player'])
+
             self.Backpropagate(node, result)
-        return root['children'][np.argmax([child['visits'] for child in root['children']])]['state']
+
+        selected_child = root['children'][np.argmax([child['wins'] / child['visits'] for child in root['children']])]
+        with open(f'child_stats/state.txt', 'a') as f:
+            f.write(f'Wins: {selected_child["wins"]}\n')
+            f.write(f'Visits: {selected_child["visits"]}\n')
+            f.write(f'UCB: {self.UCB(selected_child)}\n')
+            f.write(selected_child['state'].__str__() + '\n')
+            f.write('------------------------------------------------------------\n')
+        return selected_child['state']
     
     def get_move(self, state: np.array) -> Tuple[int, int]:
         """

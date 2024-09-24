@@ -1,1 +1,2 @@
-*.pyc
+MCTS/__pycache__/
+MCTS/players/__pycache__/
