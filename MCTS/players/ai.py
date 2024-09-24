@@ -1,4 +1,3 @@
-import time
 import math
 import random
 import numpy as np
@@ -48,11 +47,17 @@ class AIPlayer:
             return float('inf')
         return node['wins'] / (node['visits']+1)+ 1.41 * math.sqrt(math.log(node['parent']['visits']) / (node['visits']+1))
     
+    def softmax(self,x):
+        e_x = np.exp(x - np.max(x))
+        return e_x / e_x.sum()
+
     def SelectNode(self, node):
         if node['children'] == []:
             return node
         ucb_values = [self.UCB(child) for child in node['children']]
-        return node['children'][np.argmax(ucb_values)]
+        probabilities = self.softmax(ucb_values)
+        selected_index = np.random.choice(len(node['children']), p=probabilities)
+        return node['children'][selected_index]
     
     def ExpandNode(self, node):
         available_moves = np.argwhere(node['state'] == 0)   
@@ -73,7 +78,7 @@ class AIPlayer:
             self.state_tree[state.tobytes()] = {'state': state, 'parent': None, 'player': self.player_number, 'wins': 0, 'visits': 0, 'children': []}
             # 
         root = self.state_tree[state.tobytes()]
-        for _ in range(2):
+        for _ in range(1000):
             node = root
             while node['children'] != []:
                 node = self.SelectNode(node)
