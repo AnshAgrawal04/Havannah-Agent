@@ -22,99 +22,110 @@ class AIPlayer:
         self.type = 'ai'
         self.player_string = 'Player {}: ai'.format(player_number)
         self.timer = timer
+        # the state tree is of the form, we store the state, visits, moves, wins, parent , children and move that led to this state
         self.state_tree = {}
 
-    def random_rollout(self, state):
-        """
-        Randomly simulate a game from the current state to the end of the game
-        """
-        while True:
-            available_moves = np.argwhere(state == 0)
-            if len(available_moves) == 0:
-                break 
-            move = random.choice(available_moves)
-            if check_win(state,move,self.player_number):
-                return 1
-            state[move[0], move[1]] = self.player_number
-            available_moves.remove(move)
-            if len(available_moves) == 0:
-                break
-            move = random.choice(available_moves)
-            if check_win(state,move,3-self.player_number):
-                return -1
-            state[move[0], move[1]] = 3 - self.player_number
-        return 0
+        self.loose_bridge_pattern = [{'pattern': [(0, 0), (0, 1), (1, 1), (0, 2)], 'stones': [1, 0, 0, 1]},
+                                     {'pattern': [(0, 0), (1, 0), (1, 1), (2, 1)], 'stones': [1, 0, 0, 1]},
+                                     {'pattern': [(0, 0), (0, -1), (1, 0), (1, -1)], 'stones': [1, 0, 0, 1]}]
 
 
-    def UCB(self, node):
-        """
-        Calculate the UCB value of a node
-        """
-        return node['wins'] / node['visits'] + 1.41 * math.sqrt(math.log(node['parent']['visits']) / node['visits'])
-    
-    def select_node(self, node):
-        """
-        Select the best child node based on UCB values
-        """
-        if node['children'] == []:
-            return node
-        return self.select_node(max(node['children'], key=self.UCB))
-    
-    def expand_node(self, node):
-        """
-        Expand the node by adding all possible children
-        """
-        available_moves = np.argwhere(node['state'] == 0)
-        for move in available_moves:
-            new_state = node['state'].copy()
-            new_state[move[0], move[1]] = node['player']
-            node['children'].append({'state': new_state, 'player': 3 - node['player'], 'parent': node, 'children': [], 'visits': 0, 'wins': 0})
+    def forwardCheck(self, state, player):
+        for i in range(0, state.shape[0]):
+            for j in range(0, state.shape[1]):
+                if state[i][j] == 0:
+                    state[i][j] = player
+                    if check_win(state, (i, j), player)[0]:
+                        state[i][j] = 0
+                        return (i, j)
+                    state[i][j] = 0
+        return None
 
-    def backpropagate(self, node, result):
-        """
-        Backpropagate the result of the simulation to all parent nodes
-        """
-        node['visits'] += 1
-        node['wins'] += result
-        if node['parent'] != None:
-            self.backpropagate(node['parent'], result)
-    
-    def check_win1(self, node, player):  
-        """
-        Check if the player has won the game
-        """
-        # find the move using the node state and the parent node state  
-        if (node['parent']==None):
-            return False
-        move = np.argwhere(np.logical_xor(node['state'] == 0, node['parent']['state'] == 0))[0]
-        # check if the player has won the game
-        if check_win(node['state'], move,player):
-            return True
-        return False
+# i n t s e a r c h ( Node node , S t a t e s t a t e ) {
+# // r o l l o u t
+# i f ( node . n u m c h i l d r e n == 0 && node . s i m s == 0 ) {
+# w h i l e ( ! s t a t e . t e r m i n a l ( ) )
+# s t a t e . randmove ( ) ;
+# r e t u r n s t a t e . outcome ( ) ; // win = 1 , draw = 0 . 5 o r l o s s = 0
+# }
+# // expand
+# i f ( node . n u m c h i l d r e n == 0 )
+# f o r e a c h ( s t a t e . s u c c e s s o r s a s s u c c )
+# node . a d d c h i l d ( Node ( s u c c ) ) ;
+# // d e s c e n t
+# Node b e s t = node . c h i l d r e n . f i r s t ( ) ;
+# f o r e a c h ( node . c h i l d r e n a s c h i l d )
+# i f ( b e s t . v a l u e ( ) < c h i l d . v a l u e ( ) )
+# b e s t = c h i l d ;
+# i n t outcome = 1 − s e a r c h ( b e s t , s t a t e . move ( b e s t . move ) ) ;
+# // back−p r o p a g a t e
+# b e s t . s i m s += 1 ;
+# b e s t . w i n s += outcome ;
+# r e t u r n outcome ;
+# }
 
 
-    def monte_carlo_tree_search(self, state):
 
-        if tuple(map(tuple, state)) not in self.state_tree:
-            self.state_tree[tuple(map(tuple, state))] = {'state': state, 'player': self.player_number, 'parent': None, 'children': [], 'visits': 0, 'wins': 0}
-        root = self.state_tree[tuple(map(tuple, state))]
 
-        start_time = time.time()
-        while time.time() - start_time < 1.5:
-            node = self.select_node(root)
-            if self.check_win1(node,self.player_number):
-                result = 1
-            elif self.check_win1(node, 3 - self.player_number):
-                result = -1
-            else:
-                self.expand_node(node)
-                result = self.random_rollout(node['state'])
-            self.backpropagate(node, result)
+
+    def search(self, node, state):
+        if (len(node['children']) == 0 and node['visits'] == 0):
+            while not check_win(state, None, 0)[0]:
+                available_moves = np.argwhere(state == 0)
+                move = random.choice(available_moves)
+                state[move[0], move[1]] = self.player_number
+                if check_win(state, tuple(move), self.player_number)[0]:
+                    return 1
+                available_moves = np.argwhere(state == 0)
+                move = random.choice(available_moves)
+                state[move[0], move[1]] = 3 - self.player_number
+                if check_win(state, tuple(move), 3 - self.player_number)[0]:
+                    return -1
+            return 0
         
-        best_child = max(root['children'], key=lambda x: x['visits'])
-        best_move = np.argwhere(np.logical_xor(root['state'] == 0, best_child['state'] == 0))[0]
-        return (best_move[0], best_move[1])
+        if (len(node['children']) == 0):
+            for move in node['moves']:
+                new_state = state.copy()
+                new_state[move[0], move[1]] = self.player_number
+                self.state_tree[state.tobytes()]['children'].append(self.state_tree[new_state.tobytes()])
+                self.state_tree[new_state.tobytes()]['parent'] = node
+                self.state_tree[new_state.tobytes()]['move'] = move
+                node['children'].append(self.state_tree[new_state.tobytes()])
+        
+        best = node['children'][0]
+        for child in node['children']:
+            if best['wins'] < child['wins']:
+                best = child
 
+        best_changed_state = state.copy()
+        best_changed_state[best['move'][0], best['move'][1]] = self.player_number
+        outcome = 1 - self.search(best, best_changed_state)
+        best['visits'] += 1
+        best['wins'] += outcome
+        return outcome
+
+
+
+
+    def MCTS(self, state):
+        if state.tobytes() not in self.state_tree:
+            self.state_tree[state.tobytes()] = {'state': state, 'visits': 0, 'moves': [], 'wins': 0, 'parent': None, 'move': None , 'children': []}
+
+        root = self.state_tree[state.tobytes()]
+
+        timeout = 5
+        start = time.time()
+        while time.time() - start < timeout:
+            search_state = state.copy()
+            node = root
+            self.search(root,search_state)
+
+        # fidn the best child
+        best = root['children'][0]
+        for child in root['children']:
+            if best['wins'] < child['wins']:
+                best = child
+        return best['move']
 
     def get_move(self, state: np.array) -> Tuple[int, int]:
         """
@@ -133,9 +144,21 @@ class AIPlayer:
         Tuple[int, int]: action (coordinates of a board cell)
         """
         # Applying Monte Carlo Tree Search
-        return self.monte_carlo_tree_search(state)
+        # forward check for winning move
+        state_copy = state.copy()   
+        move = self.forwardCheck(state_copy, self.player_number)
+        if move is not None:
+            return move
+        # forward check for blocking move
+        move = self.forwardCheck(state_copy, 3 - self.player_number)
+        if move is not None:
+            return move
         
+        return self.MCTS(state)
 
+        
+        
+        
 
 
         # Do the rest of your implementation here
